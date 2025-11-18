@@ -53,9 +53,7 @@ def apply_antialiasing_filter(image):
     
     return filtered_image
 
-def image_to_hex_array(image):
-    """Конвертирует изображение в HEX массив для ESP32"""
-    # ... существующий код ...
+
 
 def image_to_hex_array(image):
     """Конвертирует изображение в HEX массив для ESP32"""
