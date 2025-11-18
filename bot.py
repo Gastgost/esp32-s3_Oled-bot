@@ -20,6 +20,43 @@ async def start(update: Update, context: CallbackContext) -> None:
         "Просто отправь мне картинку, и я преобразую её в монохромный формат 128x64 пикселей!"
     )
 
+def apply_antialiasing_filter(image):
+    """Применяет фильтр для удаления одиночных пикселей"""
+    pixels = image.load()
+    width, height = image.size
+    
+    # Создаем копию для изменений
+    filtered_image = image.copy()
+    filtered_pixels = filtered_image.load()
+    
+    for x in range(1, width - 1):
+        for y in range(1, height - 1):
+            current_pixel = pixels[x, y]
+            
+            # Считаем черные пиксели в окрестности 3x3
+            black_neighbors = 0
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        if pixels[nx, ny] == 0:  # Черный пиксель
+                            black_neighbors += 1
+            
+            # Убираем одиночные черные пиксели (менее 2 соседей)
+            if current_pixel == 0 and black_neighbors < 2:
+                filtered_pixels[x, y] = 255  # Белый
+            # Убираем одиночные белые пиксели в черной области
+            elif current_pixel == 255 and black_neighbors > 6:
+                filtered_pixels[x, y] = 0  # Черный
+    
+    return filtered_image
+
+def image_to_hex_array(image):
+    """Конвертирует изображение в HEX массив для ESP32"""
+    # ... существующий код ...
+
 def image_to_hex_array(image):
     """Конвертирует изображение в HEX массив для ESP32"""
     pixels = list(image.getdata())
