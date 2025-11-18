@@ -19,6 +19,7 @@ async def start(update: Update, context: CallbackContext) -> None:
         "🖼️ Привет! Я бот для конвертации изображений в битмапы для ESP32 OLED дисплея!\n\n"
         "Просто отправь мне картинку, и я преобразую её в монохромный формат 128x64 пикселей!"
     )
+
 def image_to_hex_array(image):
     """Конвертирует изображение в HEX массив для ESP32"""
     pixels = list(image.getdata())
@@ -36,7 +37,7 @@ def image_to_hex_array(image):
             hex_array.append(f"0x{byte:02X}")
     
     return "{" + ", ".join(hex_array) + "}"
-    
+
 async def handle_image(update: Update, context: CallbackContext) -> None:
     """Обработчик загрузки изображений с конвертацией в битмап"""
     try:
@@ -59,23 +60,23 @@ async def handle_image(update: Update, context: CallbackContext) -> None:
         # Генерируем HEX массив для ESP32
         hex_array = image_to_hex_array(image)
         
-            # Отправляем результат
-    await update.message.reply_photo(
-        photo=preview_bytes,
-        caption="✅ Вот как это будет выглядеть на OLED дисплее!\n\n"
-               "Скопируй этот массив в код ESP32:\n\n"
-               f"`{hex_array[:100]}...`"
-    )
-    
-    # Отправляем полный массив ОТДЕЛЬНЫМИ ЧАСТЯМИ
-    max_length = 4000  # Максимальная длина сообщения в Telegram
-    for i in range(0, len(hex_array), max_length):
-        chunk = hex_array[i:i + max_length]
-        await update.message.reply_text(f"`{chunk}`", parse_mode='MarkdownV2')
-    
-except Exception as e:
-    logger.error(f"Error processing image: {e}")
-    await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+        # Отправляем результат
+        await update.message.reply_photo(
+            photo=preview_bytes,
+            caption="✅ Вот как это будет выглядеть на OLED дисплее!\n\n"
+                   "Скопируй этот массив в код ESP32:\n\n"
+                   f"`{hex_array[:100]}...`"
+        )
+        
+        # Отправляем полный массив отдельными частями
+        max_length = 4000  # Максимальная длина сообщения в Telegram
+        for i in range(0, len(hex_array), max_length):
+            chunk = hex_array[i:i + max_length]
+            await update.message.reply_text(f"`{chunk}`", parse_mode='MarkdownV2')
+        
+    except Exception as e:
+        logger.error(f"Error processing image: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 def main() -> None:
     """Запуск бота"""
