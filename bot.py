@@ -2,7 +2,7 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
-
+from telegram import InputFile
 from PIL import Image
 import io
 
@@ -74,7 +74,7 @@ def image_to_hex_array(image):
     return "{" + ", ".join(hex_array) + "}"
 
 async def handle_image(update: Update, context: CallbackContext) -> None:
-    """Обработчик загрузки изображений с конвертацией в битмап"""
+    """Обработчик загрузки изображений с конвертацией в битмап и генерацией кода для Wokwi"""
     try:
         # Получаем файл изображения
         photo_file = await update.message.photo[-1].get_file()
@@ -95,24 +95,98 @@ async def handle_image(update: Update, context: CallbackContext) -> None:
         # Генерируем HEX массив для ESP32
         hex_array = image_to_hex_array(image)
         
+        # Генерируем полный код для Wokwi
+        wokwi_code = generate_wokwi_code(hex_array)
+        
         # Отправляем результат
         await update.message.reply_photo(
             photo=preview_bytes,
             caption="✅ Вот как это будет выглядеть на OLED дисплее!\n\n"
-                   "Скопируй этот массив в код ESP32:\n\n"
-                   f"`{hex_array[:100]}...`"
+                   "Код для Wokwi эмулятора готов!"
         )
         
-        # Отправляем полный массив отдельными частями
-        max_length = 4000  # Максимальная длина сообщения в Telegram
-        for i in range(0, len(hex_array), max_length):
-            chunk = hex_array[i:i + max_length]
-            await update.message.reply_text(f"`{chunk}`", parse_mode='MarkdownV2')
+        # Отправляем код для Wokwi файлом
+        wokwi_file = io.BytesIO(wokwi_code.encode())
+        wokwi_file.name = "esp32_oled_wokwi.ino"
+        await update.message.reply_document(
+            document=wokwi_file,
+            caption="📁 Скачай этот файл и загрузи в Wokwi.com для эмуляции ESP32-S3 с OLED дисплеем!"
+        )
+        
+        # Также отправляем текстовую версию на случай проблем с файлом
+        if len(wokwi_code) < 4000:
+            await update.message.reply_text(f"```cpp\n{wokwi_code}\n```", parse_mode='MarkdownV2')
+        else:
+            # Если код слишком длинный, разбиваем на части
+            for i in range(0, len(wokwi_code), 4000):
+                chunk = wokwi_code[i:i + 4000]
+                await update.message.reply_text(f"```cpp\n{chunk}\n```", parse_mode='MarkdownV2')
         
     except Exception as e:
         logger.error(f"Error processing image: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+def generate_wokwi_code(hex_array):
+    """Генерирует полный код для Wokwi эмулятора"""
+    return f'''#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+// ПИНЫ для ESP32-S3
+#define OLED_SDA 8
+#define OLED_SCL 9
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// БИТМАП сгенерированный ботом
+const unsigned char testBitmap[] = {hex_array};
+
+void setup() {{
+  Serial.begin(115200);
+  
+  // Инициализация I2C с пинами ESP32-S3
+  Wire.begin(OLED_SDA, OLED_SCL);
+  
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {{
+    Serial.println("OLED not found");
+    while(1);
+  }}
+  
+  Serial.println("OLED OK!");
+  
+  display.clearDisplay();
+  display.drawBitmap(0, 0, testBitmap, 128, 64, SSD1306_WHITE);
+  display.display();
+  
+  Serial.println("Bitmap displayed!");
+}}
+
+void loop() {{
+  delay(1000);
+}}
+
+/*
+📋 ИНСТРУКЦИЯ ДЛЯ WOKWI:
+
+1. Перейди на https://wokwi.com
+2. Создай новый проект → ESP32-S3
+3. Замени код в редакторе на этот
+4. Добавь дисплей:
+   - Нажми "+" добавить компонент
+   - Найди "OLED 128x64" (SSD1306)
+5. Подключи по схеме:
+   OLED VCC → 3V3
+   OLED GND → GND  
+   OLED SDA → GPIO8
+   OLED SCL → GPIO9
+6. Запусти симуляцию!
+
+💡 Дисплей должен показать ваше изображение!
+*/
+'''
 def main() -> None:
     """Запуск бота"""
     logger.info("Запуск бота...")
