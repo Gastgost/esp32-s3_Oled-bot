@@ -59,20 +59,23 @@ async def handle_image(update: Update, context: CallbackContext) -> None:
         # Генерируем HEX массив для ESP32
         hex_array = image_to_hex_array(image)
         
-        # Отправляем результат
-        await update.message.reply_photo(
-            photo=preview_bytes,
-            caption="✅ Вот как это будет выглядеть на OLED дисплее!\n\n"
-                   "Скопируй этот массив в код ESP32:\n\n"
-                   f"`{hex_array[:100]}...`"
-        )
-        
-        # Отправляем полный массив отдельным сообщением
-        await update.message.reply_text(f"Полный массив:\n\n`{hex_array}`", parse_mode='MarkdownV2')
-        
-    except Exception as e:
-        logger.error(f"Error processing image: {e}")
-        await update.message.reply_text("❌ Ошибка обработки изображения. Попробуй другую картинку.")
+            # Отправляем результат
+    await update.message.reply_photo(
+        photo=preview_bytes,
+        caption="✅ Вот как это будет выглядеть на OLED дисплее!\n\n"
+               "Скопируй этот массив в код ESP32:\n\n"
+               f"`{hex_array[:100]}...`"
+    )
+    
+    # Отправляем полный массив ОТДЕЛЬНЫМИ ЧАСТЯМИ
+    max_length = 4000  # Максимальная длина сообщения в Telegram
+    for i in range(0, len(hex_array), max_length):
+        chunk = hex_array[i:i + max_length]
+        await update.message.reply_text(f"`{chunk}`", parse_mode='MarkdownV2')
+    
+except Exception as e:
+    logger.error(f"Error processing image: {e}")
+    await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 def main() -> None:
     """Запуск бота"""
