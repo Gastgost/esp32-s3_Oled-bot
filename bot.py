@@ -3,6 +3,9 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 
+from PIL import Image
+import io
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -16,10 +19,60 @@ async def start(update: Update, context: CallbackContext) -> None:
         "🖼️ Привет! Я бот для конвертации изображений в битмапы для ESP32 OLED дисплея!\n\n"
         "Просто отправь мне картинку, и я преобразую её в монохромный формат 128x64 пикселей!"
     )
-
+def image_to_hex_array(image):
+    """Конвертирует изображение в HEX массив для ESP32"""
+    pixels = list(image.getdata())
+    width, height = image.size
+    
+    hex_array = []
+    for y in range(0, height, 8):
+        for x in range(width):
+            byte = 0
+            for bit in range(8):
+                if y + bit < height:
+                    pixel = pixels[(y + bit) * width + x]
+                    if pixel == 0:  # Чёрный пиксель
+                        byte |= (1 << bit)
+            hex_array.append(f"0x{byte:02X}")
+    
+    return "{" + ", ".join(hex_array) + "}"
+    
 async def handle_image(update: Update, context: CallbackContext) -> None:
-    """Обработчик загрузки изображений"""
-    await update.message.reply_text("📸 Картинка получена! Функция конвертации скоро будет добавлена!")
+    """Обработчик загрузки изображений с конвертацией в битмап"""
+    try:
+        # Получаем файл изображения
+        photo_file = await update.message.photo[-1].get_file()
+        photo_bytes = await photo_file.download_as_bytearray()
+        
+        # Конвертируем изображение
+        image = Image.open(io.BytesIO(photo_bytes))
+        
+        # Преобразуем в монохром 128x64
+        image = image.convert('1')  # Монохром (чёрно-белое)
+        image = image.resize((128, 64))
+        
+        # Сохраняем превью
+        preview_bytes = io.BytesIO()
+        image.save(preview_bytes, 'PNG')
+        preview_bytes.seek(0)
+        
+        # Генерируем HEX массив для ESP32
+        hex_array = image_to_hex_array(image)
+        
+        # Отправляем результат
+        await update.message.reply_photo(
+            photo=preview_bytes,
+            caption="✅ Вот как это будет выглядеть на OLED дисплее!\n\n"
+                   "Скопируй этот массив в код ESP32:\n\n"
+                   f"`{hex_array[:100]}...`"
+        )
+        
+        # Отправляем полный массив отдельным сообщением
+        await update.message.reply_text(f"Полный массив:\n\n`{hex_array}`", parse_mode='MarkdownV2')
+        
+    except Exception as e:
+        logger.error(f"Error processing image: {e}")
+        await update.message.reply_text("❌ Ошибка обработки изображения. Попробуй другую картинку.")
 
 def main() -> None:
     """Запуск бота"""
